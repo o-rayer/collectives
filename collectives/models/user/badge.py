@@ -7,6 +7,7 @@ from collectives.models.badge import Badge, BadgeIds
 from collectives.models.registration import Registration
 from collectives.models.activity_type import ActivityType
 from collectives.models import db
+from collectives.models.configuration import Configuration
 
 
 class UserBadgeMixin:
@@ -56,20 +57,28 @@ class UserBadgeMixin:
         """
         return self.has_a_valid_badge([BadgeIds.Benevole])
 
-    def has_a_valid_banned_badge(self) -> bool:
-        """Check if user has a Banned badge.
+    def has_a_valid_suspended_badge(self) -> bool:
+        """Check if user has a Suspended badge.
 
-        :return: True if user has a non-expired banned badge.
+        :return: True if user has a non-expired suspended badge.
         """
-        return self.has_a_valid_badge([BadgeIds.Banned])
+        return self.has_a_valid_badge([BadgeIds.Suspended])
 
-    def is_banned(self):
-        """Check if a user is banned.
+    def is_suspended(self) -> bool:
+        """Check if a user is suspended.
 
-        :return: True if user is banned
-        :rtype: boolean
+        :return: True if user is suspended
         """
-        return self.has_a_valid_banned_badge()
+        return self.has_a_valid_suspended_badge()
+
+    def suspension_end_date(self) -> date:
+        """Returns the expiration date if the user is currently suspended,
+        ``None`` otherwise
+        """
+        suspended_badges = self.matching_badges([BadgeIds.Suspended], valid_only=True)
+        if not suspended_badges:
+            return None
+        return max(badge.expiration_date for badge in suspended_badges)
 
     def number_of_valid_warning_badges(self) -> int:
         """Number of valid warning badges.
@@ -78,7 +87,7 @@ class UserBadgeMixin:
         :return: Number of valid warning badges.
         """
         return len(
-            self.matching_badges([BadgeIds.LateUnregisterWarning], valid_only=True)
+            self.matching_badges([BadgeIds.UnjustifiedAbsenceWarning], valid_only=True)
         )
 
     def has_badge_for_activity(
@@ -120,6 +129,7 @@ class UserBadgeMixin:
         )
 
     # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def assign_badge(
         self,
         badge_id: BadgeIds,
@@ -149,53 +159,70 @@ class UserBadgeMixin:
             db.session.rollback()
             raise e
 
-    def update_warning_badges(self, registration):
+    def increment_warning_badges(self, registration: Registration):
         """
-        Update warning badges based on user's conditions and number of warning badges,
+        Increment warning badges based on user's conditions and number of warning badges,
         and assign or update the badge with appropriate expiration date and level.
         """
 
-        # Fetch the number of warning & banned badges, whether valid or not
+        # Already suspended, do nothing
+        if self.is_suspended():
+            return
+
+        # Fetch the number of warning & suspended badges, whether valid or not
         num_valid_warning_badges = len(
-            self.matching_badges([BadgeIds.LateUnregisterWarning], valid_only=True)
+            self.matching_badges([BadgeIds.UnjustifiedAbsenceWarning], valid_only=True)
         )
         num_warning_badges = len(
-            self.matching_badges([BadgeIds.LateUnregisterWarning], valid_only=False)
+            self.matching_badges([BadgeIds.UnjustifiedAbsenceWarning], valid_only=False)
         )
-        num_valid_banned_badges = len(
-            self.matching_badges([BadgeIds.Banned], valid_only=True)
-        )
-        num_banned_badges = len(
-            self.matching_badges([BadgeIds.Banned], valid_only=False)
+        num_suspended_badges = len(
+            self.matching_badges([BadgeIds.Suspended], valid_only=False)
         )
         # Update badges and expiration dates based on conditions, or continue if nothing to do
         try:
-            if num_valid_warning_badges >= 2 and num_valid_banned_badges == 0:
-                badge_id = BadgeIds.Banned
-                expiration_date = date.today() + timedelta(weeks=4)
+            if num_valid_warning_badges >= Configuration.NUM_WARNINGS_BEFORE_SUSPENSION:
+                badge_id = BadgeIds.Suspended
+                expiration_date = date.today() + timedelta(
+                    weeks=Configuration.SUSPENSION_DURATION
+                )
                 self.assign_badge(
                     badge_id,
                     expiration_date=expiration_date,
-                    level=num_banned_badges + 1,
+                    level=num_suspended_badges + 1,
                     registration=registration,
                 )
-            elif num_valid_warning_badges < 2:
-                badge_id = BadgeIds.LateUnregisterWarning
+            else:
+                badge_id = BadgeIds.UnjustifiedAbsenceWarning
                 expiration_date = date(
-                    date.today().year
-                    if date.today().month < 10
-                    else date.today().year + 1,
-                    9,
-                    30,
-                )
+                    (
+                        date.today().year
+                        if date.today().month < Configuration.LICENSE_EXPIRY_MONTH
+                        else date.today().year + 1
+                    ),
+                    Configuration.LICENSE_EXPIRY_MONTH,
+                    1,
+                ) - timedelta(days=1)
                 self.assign_badge(
                     badge_id,
                     expiration_date=expiration_date,
                     level=num_warning_badges + 1,
                     registration=registration,
                 )
-            else:
-                pass
         except ValueError:
             # Badges update should not break unregistration logic
             pass
+
+    def remove_warning_badges(self, registration: Registration):
+        """
+        Removes warning badges associated to this registration
+        """
+
+        badges = [
+            badge
+            for badge in registration.badges
+            if badge.badge_id
+            in (BadgeIds.Suspended, BadgeIds.UnjustifiedAbsenceWarning)
+        ]
+        for badge in badges:
+            db.session.delete(badge)

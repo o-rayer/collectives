@@ -70,7 +70,7 @@ def test_assign_badge(user1, session_monkeypatch):
     Returns:
         None
     """
-    badge_id = int(BadgeIds.LateUnregisterWarning)
+    badge_id = int(BadgeIds.UnjustifiedAbsenceWarning)
     expiration_date = date.today() + timedelta(days=1)
 
     user1.assign_badge(badge_id, expiration_date=expiration_date, level=1)
@@ -80,9 +80,11 @@ def test_assign_badge(user1, session_monkeypatch):
     assert session_monkeypatch["rollback"] == 0  # Rollback should not be called
 
 
-def test_update_warning_badges_no_updates(user1, session_monkeypatch, monkeypatch):
+def test_increment_warning_badges_no_updates(
+    user1, event1_with_reg, session_monkeypatch, monkeypatch
+):
     """
-    Tests the update_warning_badges method without any
+    Tests the increment_warning_badges method without any
     badge updates and verifies the session changes.
 
     Args:
@@ -97,7 +99,9 @@ def test_update_warning_badges_no_updates(user1, session_monkeypatch, monkeypatc
     monkeypatch.setattr(user1, "has_a_valid_badge", lambda x: False)
     monkeypatch.setattr(user1, "has_badge", lambda x: False)
 
-    user1.update_warning_badges()
+    reg = event1_with_reg.existing_registrations(user1)[0]
+
+    user1.increment_warning_badges(reg)
 
     # Verify database operations were performed
     assert len(session_monkeypatch["add"]) == 1  # New badge should be added
@@ -107,15 +111,15 @@ def test_update_warning_badges_no_updates(user1, session_monkeypatch, monkeypatc
     monkeypatch.setattr(
         user1,
         "has_a_valid_badge",
-        lambda badge_ids: BadgeIds.LateUnregisterWarning in badge_ids,
+        lambda badge_ids: BadgeIds.UnjustifiedAbsenceWarning in badge_ids,
     )
     monkeypatch.setattr(
         user1,
         "has_badge",
-        lambda badge_ids: BadgeIds.LateUnregisterWarning in badge_ids,
+        lambda badge_ids: BadgeIds.UnjustifiedAbsenceWarning in badge_ids,
     )
 
-    user1.update_warning_badges()
+    user1.increment_warning_badges(reg)
 
     # Verify database operations were performed
     assert len(session_monkeypatch["add"]) == 2  # New badge should be added
@@ -128,8 +132,8 @@ def test_update_warning_badges_no_updates(user1, session_monkeypatch, monkeypatc
         user1,
         "matching_badges",
         lambda badge_ids=None: [
-            BadgeIds.LateUnregisterWarning,
-            BadgeIds.LateUnregisterWarning,
+            BadgeIds.UnjustifiedAbsenceWarning,
+            BadgeIds.UnjustifiedAbsenceWarning,
         ],
     )
 

@@ -13,6 +13,7 @@ from collectives.models import Question, QuestionType, QuestionAnswer
 from tests.fixtures import payment
 
 # pylint: disable=unused-argument, redefined-outer-name
+# pylint: disable=too-many-positional-arguments
 
 
 def inject_fixture(name, identifier):
@@ -289,7 +290,7 @@ def event_in_less_than_x_hours_with_reg(
     user_with_expired_first_warning_badge,
     user_with_valid_second_warning_badge,
     user_with_expired_second_warning_badge,
-    user_with_expired_banned_badge,
+    user_with_expired_suspended_badge,
 ):  # pylint: disable=too-many-arguments
     """
     Returns an event in less than 48 hours (parameterized)
@@ -312,7 +313,7 @@ def event_in_less_than_x_hours_with_reg(
         user_with_expired_first_warning_badge,
         user_with_valid_second_warning_badge,
         user_with_expired_second_warning_badge,
-        user_with_expired_banned_badge,
+        user_with_expired_suspended_badge,
     ]:
         prototype_event_in_less_than_x_hours.registrations.append(
             Registration(
@@ -320,6 +321,7 @@ def event_in_less_than_x_hours_with_reg(
                 status=RegistrationStatus.Active,
                 level=RegistrationLevels.Normal,
                 is_self=True,
+                registration_time=datetime.now() - timedelta(weeks=1),
             )
         )
 

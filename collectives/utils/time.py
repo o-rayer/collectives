@@ -2,7 +2,7 @@
 """
 
 from datetime import datetime, time
-from dateutil import tz
+from dateutil import tz, parser
 
 from collectives.models.configuration import Configuration
 
@@ -49,7 +49,7 @@ Server may not have fr_FR locale installed, for convenience, we
 simply define months abbreviations here"""
 
 
-def current_time():
+def current_time() -> datetime:
     """Return current time in the defined time zone.
 
     See :py:data:`config.TZ_NAME`
@@ -67,6 +67,25 @@ def current_time():
     now = datetime.now(tz_info)
 
     return now.replace(tzinfo=None)
+
+
+def parse_api_date(date_str: str) -> datetime:
+    """
+    Parse a date from client API calls
+
+    Expected format is YYYY-MM-DD + optional time/tz
+    Returns a naive datetime object in the server timezone
+    Returns ``None`` if `date_str` is invalid
+    """
+    try:
+        date = parser.parse(date_str)
+        if date.tzinfo is not None:
+            tz_name = Configuration.TZ_NAME
+            tz_info = tz.gettz(tz_name)
+            date = date.astimezone(tz=tz_info).replace(tzinfo=None)
+        return date
+    except parser.ParserError:
+        return None
 
 
 def format_date_short(value):

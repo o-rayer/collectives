@@ -228,6 +228,37 @@ def test_youth_event_failed_autoregistration(user1, user1_client, youth_event):
 
 
 # Late unregistration-related tests
+def test_unregister_in_grace_period(
+    user1_client,
+    user1,
+    event_in_less_than_x_hours_with_reg,
+):
+    """
+    Tests the late self-unregistration of a user without any unregistration-related warning badge.
+    Verifies that the user is correctly unregistered and that badges are assigned as expected.
+    """
+    event = event_in_less_than_x_hours_with_reg
+
+    # Register
+    response = user1_client.post(
+        f"/collectives/{event.id}/self_register", follow_redirects=True
+    )
+    assert response.status_code == 200
+    assert event.num_taken_slots() == 7
+    assert len(event.registrations) == 7
+
+    # Immediately unregister
+    response = user1_client.post(
+        f"/collectives/{event.id}/self_unregister", follow_redirects=True
+    )
+    assert response.status_code == 200
+    assert event.num_taken_slots() == 6
+    assert len(event.registrations) == 7
+
+    assert not event.is_late_unregistered(user1)
+    assert not user1.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
+
+
 def test_unregister_lately_no_warning(
     client_with_no_warning_badge,
     user_with_no_warning_badge,
@@ -248,7 +279,7 @@ def test_unregister_lately_no_warning(
     assert len(event.registrations) == 6
 
     assert event.is_late_unregistered(user)
-    assert user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
+    assert user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
     assert user.number_of_valid_warning_badges() == 1
 
 
@@ -272,7 +303,7 @@ def test_unregister_lately_valid_first_warning(
     assert len(event.registrations) == 6
 
     assert event.is_late_unregistered(user)
-    assert user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
+    assert user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
     assert user.number_of_valid_warning_badges() == 2
 
 
@@ -289,8 +320,8 @@ def test_unregister_lately_expired_first_warning(
     user_client = client_with_expired_first_warning_badge
     user = user_with_expired_first_warning_badge
 
-    assert not user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
-    assert user.has_badge([BadgeIds.LateUnregisterWarning])
+    assert not user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
+    assert user.has_badge([BadgeIds.UnjustifiedAbsenceWarning])
     assert user.number_of_valid_warning_badges() == 0
 
     response = user_client.post(
@@ -301,7 +332,7 @@ def test_unregister_lately_expired_first_warning(
     assert len(event.registrations) == 6
 
     assert event.is_late_unregistered(user)
-    assert user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
+    assert user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
     assert user.number_of_valid_warning_badges() == 1
 
 
@@ -325,9 +356,9 @@ def test_unregister_lately_valid_second_warning(
     assert len(event.registrations) == 6
 
     assert event.is_late_unregistered(user)
-    assert user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
+    assert user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
     assert user.number_of_valid_warning_badges() == 2
-    assert user.has_a_valid_badge([BadgeIds.Banned])
+    assert user.has_a_valid_badge([BadgeIds.Suspended])
 
 
 def test_unregister_lately_expired_second_warning(
@@ -354,9 +385,9 @@ def test_unregister_lately_expired_second_warning(
 
     assert event_in_less_than_x_hours_with_reg.is_late_unregistered(user)
     # First Warning badge did not exist so it is assigned to the user before a new Second Warning
-    assert user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
+    assert user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
     assert user.number_of_valid_warning_badges() == 2
-    assert not user.has_a_valid_badge([BadgeIds.Banned])
+    assert not user.has_a_valid_badge([BadgeIds.Suspended])
 
 
 def test_unregister_lately_from_event_with_no_activity_type(
@@ -381,23 +412,23 @@ def test_unregister_lately_from_event_with_no_activity_type(
 
     assert not event.is_late_unregistered(user)
     assert event.is_unregistered(user)
-    assert not user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
+    assert not user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
 
 
-def test_unregister_lately_expired_banned(
-    client_with_expired_banned_badge,
-    user_with_expired_banned_badge,
+def test_unregister_lately_expired_suspended(
+    client_with_expired_suspended_badge,
+    user_with_expired_suspended_badge,
     event_in_less_than_x_hours_with_reg,
 ):
     """
-    Tests the late self-unregistration of a user with an expired banned badge.
+    Tests the late self-unregistration of a user with an expired suspended badge.
     Verifies that the user is correctly unregistered and that badges are assigned as expected.
     """
     event = event_in_less_than_x_hours_with_reg
-    user_client = client_with_expired_banned_badge
-    user = user_with_expired_banned_badge
+    user_client = client_with_expired_suspended_badge
+    user = user_with_expired_suspended_badge
 
-    assert not user.has_a_valid_badge([BadgeIds.Banned])
+    assert not user.has_a_valid_badge([BadgeIds.Suspended])
 
     response = user_client.post(
         f"/collectives/{event.id}/self_unregister", follow_redirects=True
@@ -408,27 +439,27 @@ def test_unregister_lately_expired_banned(
 
     assert event_in_less_than_x_hours_with_reg.is_late_unregistered(user)
     # First Warning did not exist so it is assigned to the user before a new Second Warning
-    assert user.has_a_valid_badge([BadgeIds.LateUnregisterWarning])
+    assert user.has_a_valid_badge([BadgeIds.UnjustifiedAbsenceWarning])
     assert user.number_of_valid_warning_badges() == 1
-    assert not user.has_a_valid_badge([BadgeIds.Banned])
+    assert not user.has_a_valid_badge([BadgeIds.Suspended])
 
 
-def test_register_for_valid_banned_user(
-    client_with_valid_banned_badge,
-    user_with_valid_banned_badge,
+def test_register_for_valid_suspended_user(
+    client_with_valid_suspended_badge,
+    user_with_valid_suspended_badge,
     event_in_less_than_x_hours_with_reg,
 ):
     """
-    Tests the self-registration of a user with a valid banned badge.
+    Tests the self-registration of a user with a valid suspended badge.
     Verifies that the user cannot register to the event and that badges are assigned properly.
     """
     event = event_in_less_than_x_hours_with_reg
-    user_client = client_with_valid_banned_badge
-    user = user_with_valid_banned_badge
+    user_client = client_with_valid_suspended_badge
+    user = user_with_valid_suspended_badge
     response = user_client.get(f"/collectives/{event.id}", follow_redirects=True)
     assert response.status_code == 200
-    assert user.has_a_valid_badge([BadgeIds.Banned])
-    assert user.has_a_valid_banned_badge()
+    assert user.has_a_valid_badge([BadgeIds.Suspended])
+    assert user.has_a_valid_suspended_badge()
     assert len(event.registrations) == 6
     assert not event.can_self_register(user, datetime.now())
 
@@ -483,18 +514,18 @@ def test_register_for_valid_first_warning_user(
     assert len(event.registrations) == 1
 
 
-def test_register_for_expired_banned_user(
-    client_with_expired_banned_badge,
-    user_with_expired_banned_badge,
+def test_register_for_expired_suspended_user(
+    client_with_expired_suspended_badge,
+    user_with_expired_suspended_badge,
     event_in_less_than_x_hours,
 ):
     """
-    Tests the self-registration of a user with an expired banned badge.
+    Tests the self-registration of a user with an expired suspended badge.
     Verifies that the user is correctly registered to the event.
     """
     event = event_in_less_than_x_hours
-    user_client = client_with_expired_banned_badge
-    user = user_with_expired_banned_badge
+    user_client = client_with_expired_suspended_badge
+    user = user_with_expired_suspended_badge
 
     response = user_client.get(f"/collectives/{event.id}", follow_redirects=True)
     assert response.status_code == 200
@@ -510,4 +541,4 @@ def test_register_for_expired_banned_user(
 
     assert event.is_registered(user)
     assert len(event.registrations) == 1
-    assert not user.has_a_valid_banned_badge()
+    assert not user.has_a_valid_suspended_badge()

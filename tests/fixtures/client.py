@@ -146,6 +146,14 @@ def client_with_expired_benevole_badge(client, user_with_expired_benevole_badge)
     logout(client)
 
 
+@pytest.fixture
+def extranet_user_client(client, extranet_user):
+    """Flask client authenticated as extranet_user user."""
+    login(client, extranet_user)
+    yield client
+    logout(client)
+
+
 # User Clients related to late unregistrations
 @pytest.fixture
 def client_with_valid_first_warning_badge(client, user_with_valid_first_warning_badge):
@@ -186,17 +194,17 @@ def client_with_expired_second_warning_badge(
 
 
 @pytest.fixture
-def client_with_valid_banned_badge(client, user_with_valid_banned_badge):
-    """Flask client authenticated as user with a valid banned badge."""
-    login(client, user_with_valid_banned_badge)
+def client_with_valid_suspended_badge(client, user_with_valid_suspended_badge):
+    """Flask client authenticated as user with a valid suspended badge."""
+    login(client, user_with_valid_suspended_badge)
     yield client
     logout(client)
 
 
 @pytest.fixture
-def client_with_expired_banned_badge(client, user_with_expired_banned_badge):
-    """Flask client authenticated as user with an expired banned badge."""
-    login(client, user_with_expired_banned_badge)
+def client_with_expired_suspended_badge(client, user_with_expired_suspended_badge):
+    """Flask client authenticated as user with an expired suspended badge."""
+    login(client, user_with_expired_suspended_badge)
     yield client
     logout(client)
 
